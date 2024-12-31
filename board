@@ -1,0 +1,204 @@
+const board = document.getElementById('board');
+const pieces = new Set();
+let viewX = 0;
+let viewY = 0;
+let showThreats = false;
+let currentPiece = 'queen';
+let dragStartX = null;
+let dragStartY = null;
+
+const piecesSVG = {
+    queen: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45"><g fill="%23000" stroke="%23000" stroke-width="1.5"><path d="M 9,26 C 17.5,24.5 30,24.5 38.5,26 L 38.5,13.5 L 31,25 L 30.7,10.9 L 25.5,24.5 L 22.5,10 L 19.5,24.5 L 14.3,10.9 L 14,25 L 6.5,13.5 L 6.5,26 z"/><path d="M 9,26 C 9,28 10.5,28 11.5,30 C 12.5,31.5 12.5,31 12,33.5 C 10.5,34.5 11,36 11,36 C 9.5,37.5 11,38.5 11,38.5 C 17.5,39.5 27.5,39.5 34,38.5 C 34,38.5 35.5,37.5 34,36 C 34,36 34.5,34.5 33,33.5 C 32.5,31 32.5,31.5 33.5,30 C 34.5,28 36,28 36,26 C 27.5,24.5 17.5,24.5 9,26 z"/></g></svg>',
+    // Add other piece SVGs here...
+};
+
+function setPiece(piece) {
+    currentPiece = piece;
+}
+
+function isPositionAttacked(x, y, attacker) {
+    const [ax, ay] = attacker.split(',');
+    const [px, pt] = ax.split(':');
+    const piece = pt || currentPiece;
+    const attackerX = parseInt(px);
+    const attackerY = parseInt(ay);
+
+    if (`${x},${y}` === `${attackerX},${attackerY}`) return false;
+
+    switch (piece) {
+        case 'queen':
+            return x === attackerX || y === attackerY || 
+                   Math.abs(x - attackerX) === Math.abs(y - attackerY);
+        case 'rook':
+            return x === attackerX || y === attackerY;
+        case 'bishop':
+            return Math.abs(x - attackerX) === Math.abs(y - attackerY);
+        case 'knight':
+            const dx = Math.abs(x - attackerX);
+            const dy = Math.abs(y - attackerY);
+            return (dx === 2 && dy === 1) || (dx === 1 && dy === 2);
+        case 'king':
+            return Math.abs(x - attackerX) <= 1 && Math.abs(y - attackerY) <= 1;
+    }
+    return false;
+}
+
+function isSquareOccupied(x, y) {
+    for (let piece of pieces) {
+        const [px, py] = piece.split(',');
+        const [coordX] = px.split(':');
+        if (parseInt(coordX) === x && parseInt(py) === y) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function createCell(x, y, isUnderAttack) {
+    const cell = document.createElement('div');
+    cell.className = 'cell ' + ((x + y) % 2 === 0 ? 'white' : 'black');
+    cell.style.left = (x * 60) + 'px';
+    cell.style.top = (y * 60) + 'px';
+    if (showThreats && isUnderAttack) {
+        cell.textContent = '×';
+    }
+    return cell;
+}
+
+function isValidPosition(x, y) {
+    if (isSquareOccupied(x, y)) return false;
+    for (let piece of pieces) {
+        if (isPositionAttacked(x, y, piece)) return false;
+    }
+    return true;
+}
+
+function findNextPosition() {
+    const searchLimit = 1000;
+    let bestDist = Infinity;
+    let bestX = -1;
+    let bestY = -1;
+
+    for (let y = 0; y < searchLimit; y++) {
+        for (let x = 0; x < searchLimit; x++) {
+            if (isValidPosition(x, y)) {
+                const dist = x * x + y * y; // Prioritize top-left
+                if (dist < bestDist || (dist === bestDist && y < bestY)) {
+                    bestDist = dist;
+                    bestX = x;
+                    bestY = y;
+                }
+            }
+        }
+        if (bestX !== -1 && y > bestY + 1) break;
+    }
+
+    if (bestX !== -1) {
+        pieces.add(`${bestX}:${currentPiece},${bestY}`);
+        viewX = Math.max(0, bestX - 5);
+        viewY = Math.max(0, bestY - 5);
+        updateBoard();
+    }
+}
+
+function updateBoard() {
+    board.innerHTML = '';
+    const viewportWidth = Math.ceil(window.innerWidth / 60);
+    const viewportHeight = Math.ceil((window.innerHeight - 40) / 60);
+
+    for (let y = viewY; y < viewY + viewportHeight; y++) {
+        for (let x = viewX; x < viewX + viewportWidth; x++) {
+            let isUnderAttack = false;
+            for (let piece of pieces) {
+                if (isPositionAttacked(x, y, piece)) {
+                    isUnderAttack = true;
+                    break;
+                }
+            }
+            board.appendChild(createCell(x - viewX, y - viewY, isUnderAttack));
+        }
+    }
+
+    pieces.forEach(pos => {
+        const [px, py] = pos.split(',');
+        const [x, pt] = px.split(':');
+        const piece = pt || currentPiece;
+        const pieceX = parseInt(x);
+        const pieceY = parseInt(py);
+
+        if (pieceX >= viewX && pieceX < viewX + viewportWidth && 
+            pieceY >= viewY && pieceY < viewY + viewportHeight) {
+            const pieceDiv = document.createElement('div');
+            pieceDiv.className = 'piece';
+            pieceDiv.style.left = ((pieceX - viewX) * 60) + 'px';
+            pieceDiv.style.top = ((pieceY - viewY) * 60) + 'px';
+            pieceDiv.style.backgroundImage = `url('${piecesSVG[piece]}')`;
+            
+            let isAttacked = false;
+            for (let otherPiece of pieces) {
+                if (otherPiece !== pos && isPositionAttacked(pieceX, pieceY, otherPiece)) {
+                    isAttacked = true;
+                    break;
+                }
+            }
+            
+            if (isAttacked) {
+                pieceDiv.classList.add('attacked');
+            }
+            
+            board.appendChild(pieceDiv);
+        }
+    });
+}
+
+board.addEventListener('mousedown', (e) => {
+    if (e.button === 0 || e.button === 2) {
+        const x = Math.floor((e.clientX - board.offsetLeft) / 60) + viewX;
+        const y = Math.floor((e.clientY - board.offsetTop) / 60) + viewY;
+        
+        if (e.button === 0 && !isSquareOccupied(x, y) && isValidPosition(x, y)) {
+            pieces.add(`${x}:${currentPiece},${y}`);
+        } else if (e.button === 2) {
+            pieces.forEach(piece => {
+                const [px, py] = piece.split(',');
+                const [coordX] = px.split(':');
+                if (parseInt(coordX) === x && parseInt(py) === y) {
+                    pieces.delete(piece);
+                }
+            });
+        }
+        updateBoard();
+    }
+    
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+});
+
+board.addEventListener('contextmenu', (e) => e.preventDefault());
+
+document.addEventListener('mousemove', (e) => {
+    if (dragStartX !== null) {
+        const dx = Math.floor((dragStartX - e.clientX) / 60);
+        const dy = Math.floor((dragStartY - e.clientY) / 60);
+        viewX = Math.max(0, viewX + dx);
+        viewY = Math.max(0, viewY + dy);
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        updateBoard();
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    dragStartX = null;
+    dragStartY = null;
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') {
+        showThreats = !showThreats;
+        updateBoard();
+        e.preventDefault();
+    }
+});
+
+updateBoard();
