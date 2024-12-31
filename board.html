@@ -223,27 +223,45 @@
         }
 
         board.addEventListener('mousedown', (e) => {
-            if (e.button === 0 || e.button === 2) {
-                const x = Math.floor(e.clientX / 60) + viewX;
-                const y = Math.floor(e.clientY / 60) + viewY;
-                
-                if (e.button === 0 && !isSquareOccupied(x, y)) {
-                    pieces.add(`${x}:${currentPiece},${y}`);
-                } else if (e.button === 2) {
-                    pieces.forEach(piece => {
-                        const [px, py] = piece.split(',');
-                        const [coordX] = px.split(':');
-                        if (parseInt(coordX) === x && parseInt(py) === y) {
-                            pieces.delete(piece);
-                        }
-                    });
+    if (e.button === 0 || e.button === 2) {
+        // Adjust for board offset
+        const rect = board.getBoundingClientRect();
+        const x = Math.floor((e.clientX - rect.left) / 60) + viewX;
+        const y = Math.floor((e.clientY - rect.top) / 60) + viewY;
+
+        if (e.button === 0) {
+            // Prevent placing a piece that attacks existing pieces
+            if (!isSquareOccupied(x, y)) {
+                let isValid = true;
+                for (let piece of pieces) {
+                    if (isPositionAttacked(x, y, piece)) {
+                        isValid = false;
+                        break;
+                    }
                 }
-                updateBoard();
+                if (isValid) {
+                    pieces.add(`${x}:${currentPiece},${y}`);
+                } else {
+                    alert("Invalid position! This position attacks another piece.");
+                }
             }
-            
-            dragStartX = e.clientX;
-            dragStartY = e.clientY;
-        });
+        } else if (e.button === 2) {
+            // Remove the piece if it matches the clicked position
+            pieces.forEach(piece => {
+                const [px, py] = piece.split(',');
+                const [coordX] = px.split(':');
+                if (parseInt(coordX) === x && parseInt(py) === y) {
+                    pieces.delete(piece);
+                }
+            });
+        }
+        updateBoard();
+    }
+
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+});
+
 
         board.addEventListener('contextmenu', (e) => e.preventDefault());
 
