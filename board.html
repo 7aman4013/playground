@@ -135,10 +135,21 @@
         }
 
         function isValidPosition(x, y) {
-            if (isSquareOccupied(x, y)) return false;
+            if (isSquareOccupied(x, y)) return false; 
+
             for (let piece of pieces) {
-                if (isPositionAttacked(x, y, piece)) return false;
+                if (isPositionAttacked(x, y, piece)) return false; // is attacked
             }
+
+            for (let piece of pieces) {
+                const [px, py] = piece.split(',');
+                const [coordX] = px.split(':');
+                const attackerX = parseInt(coordX);
+                const attackerY = parseInt(py);
+
+                if (isPositionAttacked(attackerX, attackerY, `${x}:${currentPiece},${y}`)) return false; // is attacking
+            }
+            
             return true;
         }
 
@@ -231,19 +242,10 @@
 
         if (e.button === 0) {
             // Prevent placing a piece that attacks existing pieces
-            if (!isSquareOccupied(x, y)) {
-                let isValid = true;
-                for (let piece of pieces) {
-                    if (isPositionAttacked(x, y, piece)) {
-                        isValid = false;
-                        break;
-                    }
-                }
-                if (isValid) {
-                    pieces.add(`${x}:${currentPiece},${y}`);
-                } else {
-                    alert("Invalid position! This position attacks another piece.");
-                }
+            if (isValidPosition(x, y)) {
+                pieces.add(`${x}:${currentPiece},${y}`);
+            } else {
+                alert("Invalid position! This position attacks another piece or is under attack.");
             }
         } else if (e.button === 2) {
             // Remove the piece if it matches the clicked position
@@ -295,10 +297,7 @@
 </body>
 </html>
 
-
-
-
-
-Placing and removing by mouse seems to be bugged - it is tracking half a block or an entire block upwards (not sure exactly)
-
-Also, positions should make sure that they aren't attacking previous occupied positions.
+TODO:
+* Zooming in/out
+* Defining custom pieces(?)
+* Calculating space efficiency
